@@ -79,8 +79,8 @@ wellKnownProblemsTest = testGroup "Well known problems"
     , testCase "4 knights and 2 rooks" $ length (multiCombinations [(knightHit, 4), (rookHit, 2)] $ prepareBoard 4 4) @?= 8
     ]
 
-main :: IO ()
-main = defaultMain
+runAllTests :: IO ()
+runAllTests = defaultMain
        [ hitFunctionsTest
        , filteredCombinationsTest
        , multiCombinationsTest
