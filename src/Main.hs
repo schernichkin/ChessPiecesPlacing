@@ -127,7 +127,7 @@ main = do
     problem <- execParser problemParser
 
     let (hitFunctions, board, labels) = prepare problem
-        combinations = multiCombinations1 hitFunctions board
+        combinations = multiCombinations hitFunctions board
 
     res <- measure (length combinations)
     print $ fst res
@@ -139,32 +139,3 @@ main = do
         printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
 
     mapM_ printBoard solutionsToPrint
-
-
-filteredCombinations1 :: (a -> a -> Bool) -> Int -> [a] -> ([a] -> [a]) -> [([a], [a])]
-filteredCombinations1 hits count free preserved = go count free preserved [] []
-    where
-        go 0 remains preserve placed otherResults = (reverse placed, preserve remains) : otherResults
-        go _ []             _      _ otherResults = otherResults
-        go n (x:xs)  preserve placed otherResults = go (n - 1) (notHitByX xs) (notHitByX . preserve) (x:placed) withoutX
-            where
-                notHitByX = filter (not . hits x)
-                withoutX  = go n xs ((:)x . preserve) placed otherResults
-
-partition1 :: (a -> Bool) -> [a] -> ([a] -> [a], [a] -> [a])
-partition1 f xs = go xs (id, id)
-    where
-        go [] r          = r
-        go (x:xs) (l, r) = if (f x) then go xs (\xs -> x:(l xs), r)
-                                    else go xs (l, \xs -> x:(r xs))
-
-multiCombinations1 :: [(a -> a -> Bool, Int)] -> [a] -> [[[a]]]
-multiCombinations1 = go []
-    where
-        go placed [] _                    = [reverse placed]
-        go placed ((hits, count):xs) free = concatMap (uncurry nextPiece) combinations
-            where
-                (preserved, safe) = partition1 (`canHit` placed) free
-                combinations = filteredCombinations1 hits count (safe []) preserved
-                nextPiece occupied = go (occupied:placed) xs
-                canHit = any . any . hits
