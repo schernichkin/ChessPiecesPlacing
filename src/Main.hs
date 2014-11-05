@@ -119,7 +119,7 @@ showBoard w h pieces = unlines [[square x y  | x <- [0 .. w - 1]] | y <- [h - 1,
     where
         square x y = case filter  (\(_, pos) -> pos == (x, y)) pieces of
                         (c, _):_ -> c
-                        [] -> if even x /= even y then '·' else '●'
+                        [] -> if even x /= even y then '.' else '*'
 
 -- | The main entry point.
 main :: IO ()
