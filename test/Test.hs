@@ -2,6 +2,7 @@
 
 module Test where
 
+import           Control.Arrow
 import           Data.List
 import           Main
 import           Test.Framework
@@ -32,7 +33,7 @@ filteredCombinationsTest = testGroup "Combinations"
     , testProperty "All items in combinations unique"
         $ forAll nk
         $ \(n, k) -> let combinations = filteredCombinations (const $ const False) (fromIntegral k) [1..n] []
-                     in  combinations ==  map (\(a, b) -> (nub a, nub b)) combinations
+                     in  combinations ==  map (nub *** nub) combinations
     ] where
         nk = do
             n <- choose (0, 11)
@@ -68,7 +69,7 @@ multiCombinationsTest =  testGroup "Multicombinations"
 
 multicombinationCount :: Integral a => a -> [a] -> a
 multicombinationCount _ []     = 1
-multicombinationCount n (k:ks) = (combinationCount n k) * (multicombinationCount (n - k) ks)
+multicombinationCount n (k:ks) = combinationCount n k * multicombinationCount (n - k) ks
 
 wellKnownProblemsTest :: Test
 wellKnownProblemsTest = testGroup "Well known problems"

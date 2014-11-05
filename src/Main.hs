@@ -7,17 +7,11 @@ import           Data.Maybe
 import           Options.Applicative
 import           System.CPUTime
 
-{-
-printBoard :: Int -> Int -> [(ChessPiece, (Int, Int))] -> String
-printBoard w h pieces = unlines [[piece x y  | x <- [0 .. w - 1]] | y <- [h - 1, h - 2 .. 0 ]]
-    where
-        piece x y = case filter  (\(_, pos) -> pos == (x, y)) pieces of
-                        (ChessPiece c, _):_ -> c
-                        [] -> if even x /= even y then ' ' else '█'
--}
-
+-- | Generate all conbinations where hit function returns false for each pair of items.
+-- Will also return list of unused items concatinated with preserved items which are not `hit' by
+-- any of selected items
 filteredCombinations :: (a -> a -> Bool) -> Int -> [a] -> [a] -> [([a], [a])]
-filteredCombinations hits count free preserved = go count free ((++) preserved) [] []
+filteredCombinations hits count free preserved = go count free (preserved ++) [] []
     where
         go 0 remains preserve placed otherResults = (reverse placed, preserve remains) : otherResults
         go _ []             _      _ otherResults = otherResults
@@ -26,16 +20,19 @@ filteredCombinations hits count free preserved = go count free ((++) preserved) 
                 notHitByX = filter (not . hits x)
                 withoutX  = go n xs ((:)x . preserve) placed otherResults
 
-multiCombinations :: [(a -> a -> Bool, Int)] -> [a] -> [[[a]]] -- внутренний - фигрура, средний - доска.
+-- | Generate all lists of combinations for supplied list of hit functions with items count and
+-- list of free items. All items in the list do not hit any other items in the same list. Each list
+-- contains same number of combinations in same order as in the hit function list.
+multiCombinations :: [(a -> a -> Bool, Int)] -> [a] -> [[[a]]]
 multiCombinations = go []
     where
-        go placed [] _                          = [reverse placed]
-        go placed ((hits, count):xs) unoccupied = concatMap (uncurry nextPiece) combinations
+        go placed [] _                    = [reverse placed]
+        go placed ((hits, count):xs) free = concatMap (uncurry nextPiece) combinations
             where
-                (preserved, safe) = partition (canHit placed) unoccupied
+                (preserved, safe) = partition (`canHit` placed) free
                 combinations = filteredCombinations hits count safe preserved
-                nextPiece occupied remains = go (occupied:placed) xs remains
-                canHit occupied pos = or $ map (any $ hits pos) $ occupied
+                nextPiece occupied = go (occupied:placed) xs
+                canHit = any . any . hits
 
 -- | Problem definition
 data Problem = Problem { width          :: Int
@@ -68,16 +65,15 @@ problemParser =
              <*> option auto (long "pring" <> short 'p' <> help "Print INT solutions (specify -1 to print all solutions, default 0)" <> value 0 <> metavar "INT" )
 
         natural arg = case reads arg of
-             [(r, "")] -> if (r > 0)
-                            then return r
-                            else fail "piece count must be greater than zero."
+             [(r, "")] -> if r > 0 then return r
+                                   else fail "piece count must be greater than zero."
              _         -> fail $ "cannot parse value `" ++ arg ++ "'."
 
 -- | Convert problem to a list of hit fuctions with count of pieces, list of positions and list of piece labels.
 prepare :: Problem -> ([((Int, Int) -> (Int, Int) -> Bool, Int)], [(Int, Int)], [Char])
 prepare problem = (hitFunctions, prepareBoard (width problem) (height problem), labels)
     where
-        (hitFunctions, labels) = unzip $ catMaybes $ map
+        (hitFunctions, labels) = unzip $ mapMaybe
                (\(count, hitFunc, label) -> fmap (\c -> ((hitFunc, c), label)) count)
                [ (queens problem,  queenHit,  'q')
                , (rooks problem,   rookHit,   'r')
@@ -117,15 +113,29 @@ measure x = do
     end <- getCPUTime
     return (result, (end - start) `div` 10 ^ (9 :: Integer))
 
+-- | Generate graphical board presentation in String format.
+showBoard :: Int -> Int -> [(Char, (Int, Int))] -> String
+showBoard w h pieces = unlines [[square x y  | x <- [0 .. w - 1]] | y <- [h - 1, h - 2 .. 0 ]]
+    where
+        square x y = case filter  (\(_, pos) -> pos == (x, y)) pieces of
+                        (c, _):_ -> c
+                        [] -> if even x /= even y then '·' else '●'
+
 -- | The main entry point.
 main :: IO ()
 main = do
     problem <- execParser problemParser
-    print problem
-    let (hitFunctions, board, _) = prepare problem
+
+    let (hitFunctions, board, labels) = prepare problem
         combinations = multiCombinations hitFunctions board
+
     res <- measure (length combinations)
     print $ fst res
     when (measureTime problem) (print $ snd res)
 
-    -- print $ length $ multiCombinations [((♛), 1), ((♜), 1), ((♝), 1), ((♚), 2), ((♞), 1)] (board 6 9)
+    let solutionsToPrint = case printSolutions problem of
+                                c | c < 0     -> combinations
+                                  | otherwise -> take c combinations
+        printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
+
+    mapM_ printBoard solutionsToPrint
