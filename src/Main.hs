@@ -1,11 +1,15 @@
+{-# LANGUAGE DeriveFoldable #-}
 module Main where
 
 import           Control.Exception
 import           Control.Monad
-import           Data.List
+import           Data.List (partition)
 import           Data.Maybe
 import           Options.Applicative
 import           System.CPUTime
+import           Data.Foldable
+import Prelude hiding (concatMap, any)
+import Data.Monoid
 
 -- | Generate all conbinations where hit function returns false for each pair of items.
 -- Will also return list of unused items concatinated with preserved items which are not `hit' by
@@ -32,6 +36,28 @@ multiCombinations = go []
                 (preserved, safe) = partition (`canHit` placed) free
                 combinations = filteredCombinations hits count safe preserved
                 nextPiece occupied = go (occupied:placed) xs
+                canHit = any . any . hits
+
+data SolutionTree a = Node [a] [SolutionTree a] deriving (Show)
+
+countSoluntions :: [SolutionTree a] -> Int
+countSoluntions = go
+    where
+        go [] = 0
+        go ((Node _ []):xs) = 1 + go xs
+        go ((Node _ next):xs) = countSoluntions next + go xs
+
+multiCombinations1 :: [(a -> a -> Bool, Int)] -> [a] -> [SolutionTree a]
+multiCombinations1 = go []
+    where
+        go placed [] _ = [Node [] []]
+        go placed ((hits, count):xs) free = result
+            where
+                allCombinations = filteredCombinations hits count safe preserved
+                mappedCombinations = map (\(combination, free) ->  (combination, go (combination:placed) xs free)) allCombinations
+                valid = filter (\(combination, next) -> not $ null next) mappedCombinations
+                result = map (\(combination, next) -> Node combination next) valid
+                (preserved, safe) = partition (`canHit` placed) free
                 canHit = any . any . hits
 
 -- | Problem definition
@@ -127,15 +153,16 @@ main = do
     problem <- execParser problemParser
 
     let (hitFunctions, board, labels) = prepare problem
-        combinations = multiCombinations hitFunctions board
+        combinations = multiCombinations1 hitFunctions board
 
-    res <- measure (length combinations)
+    res <- measure (countSoluntions  combinations)
     print $ fst res
     when (measureTime problem) (print $ snd res)
+    -- print $ combinations
 
-    let solutionsToPrint = case printSolutions problem of
-                                c | c < 0     -> combinations
-                                  | otherwise -> take c combinations
-        printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
+    -- let solutionsToPrint = case printSolutions problem of
+    --                            c | c < 0     -> combinations
+    --                              | otherwise -> take c combinations
+    --    printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
 
-    mapM_ printBoard solutionsToPrint
+    -- mapM_ printBoard solutionsToPrint
