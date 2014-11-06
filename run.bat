@@ -1,1 +1,1 @@
-.\dist\build\ChessPiecesPlacer\ChessPiecesPlacer.exe 6 9 -q 1 -r 1 -b 1 -k 2 -n 1
+.\dist\build\ChessPiecesPlacer\ChessPiecesPlacer.exe 6 9 -q 1 -r 1 -b 1 -k 2 -n 1 -t -p 4

@@ -4,6 +4,7 @@ module Test where
 
 import           Control.Arrow
 import           Data.List
+import           Data.Tree
 import           Main
 import           Test.Framework
 import           Test.Framework.Providers.HUnit
@@ -67,6 +68,29 @@ multiCombinationsTest =  testGroup "Multicombinations"
             ks <- vectorOf l (choose (0, (n * 2) `div` (if l == 0 then 1 else l))) `suchThat` \ks -> sum ks <= n
             return (n, ks)
 
+multiCombinations1Test :: Test
+multiCombinations1Test =  testGroup "Multicombinations"
+    [ testProperty "Correct number of multicombinations generated"
+        $ forAll nks
+        $ \(n, ks) -> let combinations = multiCombinations1 (map (\k -> (const $ const False, k)) ks) [1..n]
+                      in  leafCount combinations == multicombinationCount n ks
+    , testProperty "All multicombinations unique"
+        $ forAll nks
+        $ \(n, ks) -> let combinations = multiCombinations1 (map (\k -> (const $ const False, k)) ks) [1..n]
+                      in  map flatten combinations == nub (map flatten combinations)
+    , testProperty "Combination count does not depend on order"
+        $ forAll nks
+        $ \(n, ks) -> let combinations1 = multiCombinations1 (map (\k -> (const $ const False, k)) ks) [1..n]
+                          combinations2 = multiCombinations1 (map (\k -> (const $ const False, k)) $ reverse ks) [1..n]
+                      in  leafCount combinations1 == leafCount combinations2
+    ] where
+        nks = do
+            n <- choose (0, 9)
+            l <- choose (0, n `div` 2)
+            ks <- vectorOf l (choose (0, (n * 2) `div` (if l == 0 then 1 else l))) `suchThat` \ks -> sum ks <= n
+            return (n, ks)
+
+
 multicombinationCount :: Integral a => a -> [a] -> a
 multicombinationCount _ []     = 1
 multicombinationCount n (k:ks) = combinationCount n k * multicombinationCount (n - k) ks
@@ -80,10 +104,11 @@ wellKnownProblemsTest = testGroup "Well known problems"
     , testCase "4 knights and 2 rooks" $ length (multiCombinations [(knightHit, 4), (rookHit, 2)] $ prepareBoard 4 4) @?= 8
     ]
 
-runAllTests :: IO ()
-runAllTests = defaultMain
+main :: IO ()
+main = defaultMain
        [ hitFunctionsTest
        , filteredCombinationsTest
        , multiCombinationsTest
        , wellKnownProblemsTest
+       , multiCombinations1Test
        ]

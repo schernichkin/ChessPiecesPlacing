@@ -7,9 +7,7 @@ import           Data.List (partition)
 import           Data.Maybe
 import           Options.Applicative
 import           System.CPUTime
-import           Data.Foldable
-import Prelude hiding (concatMap, any)
-import Data.Monoid
+import           Data.Tree
 
 -- | Generate all conbinations where hit function returns false for each pair of items.
 -- Will also return list of unused items concatinated with preserved items which are not `hit' by
@@ -23,6 +21,18 @@ filteredCombinations hits count free preserved = go count free (preserved ++) []
             where
                 notHitByX = filter (not . hits x)
                 withoutX  = go n xs ((:)x . preserve) placed otherResults
+
+{- no effect
+filteredCombinations1 :: (a -> a -> Bool) -> Int -> [a] -> [a] -> [([a], [a])]
+filteredCombinations1 hits count free preserved = go count free (preserved ++) id []
+    where
+        go 0 remains preserve placed otherResults = (placed [], preserve remains) : otherResults
+        go _ []             _      _ otherResults = otherResults
+        go n (x:xs)  preserve placed otherResults = go (n - 1) (notHitByX xs) (notHitByX . preserve) (\a -> placed (x:a)) withoutX
+            where
+                notHitByX = filter (not . hits x)
+                withoutX  = go n xs ((:)x . preserve) placed otherResults
+-}
 
 -- | Generate all lists of combinations for supplied list of hit functions with items count and
 -- list of free items. All items in the list do not hit any other items in the same list. Each list
@@ -38,27 +48,33 @@ multiCombinations = go []
                 nextPiece occupied = go (occupied:placed) xs
                 canHit = any . any . hits
 
-data SolutionTree a = Node [a] [SolutionTree a] deriving (Show)
-
-countSoluntions :: [SolutionTree a] -> Int
-countSoluntions = go
-    where
-        go [] = 0
-        go ((Node _ []):xs) = 1 + go xs
-        go ((Node _ next):xs) = countSoluntions next + go xs
-
-multiCombinations1 :: [(a -> a -> Bool, Int)] -> [a] -> [SolutionTree a]
+multiCombinations1 :: [(a -> a -> Bool, Int)] -> [a] -> Forest [a]
 multiCombinations1 = go []
     where
-        go placed [] _ = [Node [] []]
-        go placed ((hits, count):xs) free = result
+        go      _                []     _ = [Node [] []]
+        go placed ((hits, count):xs) free = case xs of
+            [] -> map (\(combination, _) -> Node combination []) combinations
+            _  -> let mapped    = map (\(combination, free) ->  (combination, go (combination:placed) xs free)) combinations
+                      completed = filter (\(combination, next) -> not $ null next) mapped
+                   in map (\(combination, next) -> Node combination next) completed
             where
-                allCombinations = filteredCombinations hits count safe preserved
-                mappedCombinations = map (\(combination, free) ->  (combination, go (combination:placed) xs free)) allCombinations
-                valid = filter (\(combination, next) -> not $ null next) mappedCombinations
-                result = map (\(combination, next) -> Node combination next) valid
+                combinations = filteredCombinations hits count safe preserved
                 (preserved, safe) = partition (`canHit` placed) free
                 canHit = any . any . hits
+
+-- | Count leaves in given forest
+leafCount :: Forest a -> Int
+leafCount = sum . map go
+    where
+        go (Node _ []) = 1
+        go (Node _ subforest) = leafCount subforest
+
+-- concatMap based for baseline performance 
+listMultiCombinations :: Forest a -> [[a]]
+listMultiCombinations = concatMap (go [])
+    where
+        go prefix (Node combination [])        = [ (reverse $ combination : prefix) ]
+        go prefix (Node combination subforest) = concatMap (\tree -> go (combination : prefix) tree) subforest
 
 -- | Problem definition
 data Problem = Problem { width          :: Int
@@ -147,6 +163,14 @@ showBoard w h pieces = unlines [[square x y  | x <- [0 .. w - 1]] | y <- [h - 1,
                         (c, _):_ -> c
                         [] -> if even x /= even y then '.' else '*'
 
+testTree = Node 1 [Node 2 [], Node 3 [Node 4 [], Node 5 []]]
+
+testa :: [a] -> [a]
+testa = go id
+    where go prefix [] = prefix []
+          go prefix (x:xs) = go (\a -> prefix (x:a)) xs
+
+
 -- | The main entry point.
 main :: IO ()
 main = do
@@ -154,15 +178,14 @@ main = do
 
     let (hitFunctions, board, labels) = prepare problem
         combinations = multiCombinations1 hitFunctions board
-
-    res <- measure (countSoluntions  combinations)
+    
+    res <- measure (length $ listMultiCombinations  combinations)
     print $ fst res
     when (measureTime problem) (print $ snd res)
-    -- print $ combinations
 
-    -- let solutionsToPrint = case printSolutions problem of
+    --let solutionsToPrint = case printSolutions problem of
     --                            c | c < 0     -> combinations
-    --                              | otherwise -> take c combinations
+    --                              | otherwise -> take c $ combinations
     --    printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
 
     -- mapM_ printBoard solutionsToPrint
