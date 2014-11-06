@@ -22,18 +22,6 @@ filteredCombinations hits count free preserved = go count free (preserved ++) []
                 notHitByX = filter (not . hits x)
                 withoutX  = go n xs ((:)x . preserve) placed otherResults
 
-{- no effect
-filteredCombinations1 :: (a -> a -> Bool) -> Int -> [a] -> [a] -> [([a], [a])]
-filteredCombinations1 hits count free preserved = go count free (preserved ++) id []
-    where
-        go 0 remains preserve placed otherResults = (placed [], preserve remains) : otherResults
-        go _ []             _      _ otherResults = otherResults
-        go n (x:xs)  preserve placed otherResults = go (n - 1) (notHitByX xs) (notHitByX . preserve) (\a -> placed (x:a)) withoutX
-            where
-                notHitByX = filter (not . hits x)
-                withoutX  = go n xs ((:)x . preserve) placed otherResults
--}
-
 -- | Generate all lists of combinations for supplied list of hit functions with items count and
 -- list of free items. All items in the list do not hit any other items in the same list. Each list
 -- contains same number of combinations in same order as in the hit function list.
@@ -69,11 +57,11 @@ leafCount = sum . map go
         go (Node _ []) = 1
         go (Node _ subforest) = leafCount subforest
 
--- concatMap based for baseline performance 
+-- concatMap based for baseline performance
 listMultiCombinations :: Forest a -> [[a]]
 listMultiCombinations = concatMap (go [])
     where
-        go prefix (Node combination [])        = [ (reverse $ combination : prefix) ]
+        go prefix (Node combination []) = [ (reverse $ combination : prefix) ]
         go prefix (Node combination subforest) = concatMap (\tree -> go (combination : prefix) tree) subforest
 
 -- | Problem definition
@@ -163,14 +151,6 @@ showBoard w h pieces = unlines [[square x y  | x <- [0 .. w - 1]] | y <- [h - 1,
                         (c, _):_ -> c
                         [] -> if even x /= even y then '.' else '*'
 
-testTree = Node 1 [Node 2 [], Node 3 [Node 4 [], Node 5 []]]
-
-testa :: [a] -> [a]
-testa = go id
-    where go prefix [] = prefix []
-          go prefix (x:xs) = go (\a -> prefix (x:a)) xs
-
-
 -- | The main entry point.
 main :: IO ()
 main = do
@@ -178,14 +158,15 @@ main = do
 
     let (hitFunctions, board, labels) = prepare problem
         combinations = multiCombinations1 hitFunctions board
-    
-    res <- measure (length $ listMultiCombinations  combinations)
+
+    res <- measure (leafCount combinations)
     print $ fst res
+
     when (measureTime problem) (print $ snd res)
 
-    --let solutionsToPrint = case printSolutions problem of
-    --                            c | c < 0     -> combinations
-    --                              | otherwise -> take c $ combinations
-    --    printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
-
-    -- mapM_ printBoard solutionsToPrint
+    case printSolutions problem of
+       c | c > 0     -> mapM_ printBoard (take c solutionList)
+         | c < 0     -> mapM_ printBoard solutionList
+         | otherwise -> return ()
+         where printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
+               solutionList = listMultiCombinations combinations
