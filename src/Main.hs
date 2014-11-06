@@ -1,13 +1,11 @@
-{-# LANGUAGE DeriveFoldable #-}
 module Main where
 
 import           Control.Exception
 import           Control.Monad
-import           Data.List (partition)
+import           Data.List
 import           Data.Maybe
 import           Options.Applicative
 import           System.CPUTime
-import           Data.Tree
 
 -- | Generate all conbinations where hit function returns false for each pair of items.
 -- Will also return list of unused items concatinated with preserved items which are not `hit' by
@@ -35,34 +33,6 @@ multiCombinations = go []
                 combinations = filteredCombinations hits count safe preserved
                 nextPiece occupied = go (occupied:placed) xs
                 canHit = any . any . hits
-
-multiCombinations1 :: [(a -> a -> Bool, Int)] -> [a] -> Forest [a]
-multiCombinations1 = go []
-    where
-        go      _                []     _ = [Node [] []]
-        go placed ((hits, count):xs) free = case xs of
-            [] -> map (\(combination, _) -> Node combination []) combinations
-            _  -> let mapped    = map (\(combination, free) ->  (combination, go (combination:placed) xs free)) combinations
-                      completed = filter (\(combination, next) -> not $ null next) mapped
-                   in map (\(combination, next) -> Node combination next) completed
-            where
-                combinations = filteredCombinations hits count safe preserved
-                (preserved, safe) = partition (`canHit` placed) free
-                canHit = any . any . hits
-
--- | Count leaves in given forest
-leafCount :: Forest a -> Int
-leafCount = sum . map go
-    where
-        go (Node _ []) = 1
-        go (Node _ subforest) = leafCount subforest
-
--- concatMap based for baseline performance
-listMultiCombinations :: Forest a -> [[a]]
-listMultiCombinations = concatMap (go [])
-    where
-        go prefix (Node combination []) = [ (reverse $ combination : prefix) ]
-        go prefix (Node combination subforest) = concatMap (\tree -> go (combination : prefix) tree) subforest
 
 -- | Problem definition
 data Problem = Problem { width          :: Int
@@ -157,16 +127,15 @@ main = do
     problem <- execParser problemParser
 
     let (hitFunctions, board, labels) = prepare problem
-        combinations = multiCombinations1 hitFunctions board
+        combinations = multiCombinations hitFunctions board
 
-    res <- measure (leafCount combinations)
+    res <- measure (length combinations)
     print $ fst res
-
     when (measureTime problem) (print $ snd res)
 
-    case printSolutions problem of
-       c | c > 0     -> mapM_ printBoard (take c solutionList)
-         | c < 0     -> mapM_ printBoard solutionList
-         | otherwise -> return ()
-         where printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
-               solutionList = listMultiCombinations combinations
+    let solutionsToPrint = case printSolutions problem of
+                                c | c < 0     -> combinations
+                                  | otherwise -> take c combinations
+        printBoard = putStrLn . showBoard (width problem) (height problem) . concatMap (\(l, xs) -> map ((,)l) xs) . zip labels
+
+    mapM_ printBoard solutionsToPrint
