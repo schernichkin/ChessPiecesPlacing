@@ -64,10 +64,12 @@ problemParser =
              <*> flag False True ( long "time" <> short 't' <> help "Print time taken to calculate positions (in ms.)" )
              <*> option auto (long "pring" <> short 'p' <> help "Print INT solutions (specify -1 to print all solutions, default 0)" <> value 0 <> metavar "INT" )
 
-        natural arg = case reads arg of
-             [(r, "")] -> if r > 0 then return r
-                                   else fail "piece count must be greater than zero."
-             _         -> fail $ "cannot parse value `" ++ arg ++ "'."
+        natural = do
+          arg <- auto
+          case arg of
+             r -> if r > 0 then return r
+                           else fail "piece count must be greater than zero."
+             -- _         -> fail $ "cannot parse value `" ++ vvvv ++ "'."
 
 -- | Convert problem to a list of hit fuctions with count of pieces, list of positions and list of piece labels.
 prepare :: Problem -> ([((Int, Int) -> (Int, Int) -> Bool, Int)], [(Int, Int)], [Char])
